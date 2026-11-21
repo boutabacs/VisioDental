@@ -3,12 +3,9 @@
 **Source-available dental clinic management software. Patients, odontogram, scheduling,
 treatment plans, billing and a built-in AI copilot — modular, self-hosted, API-first.
 
-### ▶ [**Try the live demo**](https://demo.visiodental.com)
-
 Sign in with `admin@demo.clinic` / `demo1234` — full admin access to a seeded clinic.
 Reset every night, so poke at anything.
 
-<sub>[Website](https://www.visiodental.com) · [Docs](https://docs.visiodental.com) · [Telegram](https://t.me/visiodental)</sub>
 
 ## Why VisioDental?
 
@@ -51,14 +48,6 @@ This isn't a chatbot bolted on top. The Copilot is a true agent that **plans and
 - **Modular by design.** The Copilot consumes tools published by each module through a shared registry; every module contributes its own capabilities, so the agent grows automatically as new modules are installed.
 
 Vendor-agnostic under the hood (an LLM-provider abstraction), with provider, model, and per-clinic token budgets configurable per deployment.
-
-## Website
-
-Visit [**visiodental.com**](https://www.visiodental.com) for product info, features, and commercial details.
-
-## Community
-
-Join our [**Telegram channel**](https://t.me/visiodental) for support, installation help, and questions.
 
 ## Install
 
@@ -272,10 +261,6 @@ every UI language, plus
 `pt-BR` as an overlay that only ships the templates whose wording differs from `pt`;
 each clinic picks its communication language independently of the staff UI language.
 
-Want your language? Adding one is a translation-only contribution — see the
-[i18n issues](https://github.com/visiodental/visiodental/issues?q=label%3Ai18n) or
-open a new one.
-
 ## Development
 
 ### Prerequisites
@@ -349,7 +334,3 @@ VisioDental uses a modular plugin architecture. Each feature is a self-contained
 - Can subscribe to events from other modules
 
 Each module is self-contained under `back-end/src/modules/` (Express router, Prisma models, optional event handlers) with its matching Nuxt layer under `frontend/layers/`.
-
----
-
-Backed by [Dentaltix](https://www.dentaltix.com)
