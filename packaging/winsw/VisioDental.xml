@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Service Windows « VisioDental » (WinSW).
+  Copié à la racine de <installation> ; %BASE% est résolu par WinSW vers
+  le dossier de l'exécutable du service ($InstallDir\VisioDental.exe).
+-->
+<service>
+  <id>VisioDental</id>
+  <name>VisioDental Server</name>
+  <description>Serveur VisioDental — API, interface et travaux planifiés du cabinet.</description>
+
+  <executable>%BASE%\runtime\node.exe</executable>
+  <arguments>runtime\start.mjs</arguments>
+  <workingdirectory>%BASE%</workingdirectory>
+  <startmode>Automatic</startmode>
+  <delayedAutoStart>true</delayedAutoStart>
+
+  <onfailure action="restart" delay="10 sec"/>
+  <resetfailure>1 hour</resetfailure>
+  <stoptimeout>20 sec</stoptimeout>
+
+  <logpath>%BASE%\logs</logpath>
+  <log mode="roll-by-size">
+    <sizeThreshold>10240</sizeThreshold>
+    <keepFiles>10</keepFiles>
+  </log>
+
+  <env name="NODE_ENV" value="production"/>
+</service>

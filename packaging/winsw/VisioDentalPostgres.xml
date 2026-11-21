@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Service Windows « VisioDental PostgreSQL » (WinSW 3).
+  PostgreSQL portable embarqué ; données dans <installation>\data\pg.
+-->
+<service>
+  <id>VisioDentalPostgres</id>
+  <name>VisioDental PostgreSQL</name>
+  <description>Base de données PostgreSQL du serveur VisioDental.</description>
+
+  <executable>%BASE%\pgsql\bin\postgres.exe</executable>
+  <arguments>-D "%BASE%\data\pg"</arguments>
+  <workingdirectory>%BASE%</workingdirectory>
+  <startmode>Automatic</startmode>
+
+  <onfailure action="restart" delay="10 sec"/>
+  <resetfailure>1 hour</resetfailure>
+  <stoptimeout>60 sec</stoptimeout>
+
+  <logpath>%BASE%\logs</logpath>
+  <log mode="roll-by-size">
+    <sizeThreshold>10240</sizeThreshold>
+    <keepFiles>5</keepFiles>
+  </log>
+</service>

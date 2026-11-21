@@ -1,0 +1,32 @@
+# Nuxt dev/build outputs
+.output
+.data
+.nuxt
+.nitro
+.cache
+dist
+
+# Node dependencies
+node_modules
+
+# Logs
+logs
+*.log
+
+# Misc
+.DS_Store
+.fleet
+.idea
+
+# Local env files
+.env
+.env.*
+!.env.example
+playwright-report/
+test-results/
+
+# Backend-generated Nuxt layer manifest. Written at runtime with the
+# machine's absolute module paths (see backend DENTALPIN_MODULE_LAYERS_MOUNT),
+# so it must never be committed. Regenerate with:
+#   cd frontend && node scripts/modules-json.mjs ../backend/app/modules
+modules.json

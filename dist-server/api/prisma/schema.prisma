@@ -1,0 +1,1978 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model agent_approval_queue {
+  id             String         @id @db.Uuid
+  agent_id       String         @db.Uuid
+  session_id     String         @db.Uuid
+  clinic_id      String         @db.Uuid
+  tool_name      String         @db.VarChar(200)
+  arguments      Json           @default("{}")
+  reason         String?        @db.VarChar(500)
+  status         String         @default("pending") @db.VarChar(20)
+  reviewed_by    String?        @db.Uuid
+  reviewed_at    DateTime?      @db.Timestamptz(6)
+  review_notes   String?        @db.VarChar(1000)
+  created_at     DateTime       @db.Timestamptz(6)
+  updated_at     DateTime       @db.Timestamptz(6)
+  agents         agents         @relation(fields: [agent_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  clinics        clinics        @relation(fields: [clinic_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  users          users?         @relation(fields: [reviewed_by], references: [id], onUpdate: NoAction)
+  agent_sessions agent_sessions @relation(fields: [session_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@index([agent_id], map: "ix_agent_approval_queue_agent_id")
+  @@index([clinic_id], map: "ix_agent_approval_queue_clinic_id")
+  @@index([session_id], map: "ix_agent_approval_queue_session_id")
+  @@index([clinic_id, status, created_at], map: "ix_approval_pending")
+}
+
+model agent_audit_logs {
+  id                String         @id @db.Uuid
+  agent_id          String         @db.Uuid
+  session_id        String         @db.Uuid
+  clinic_id         String         @db.Uuid
+  supervisor_id     String?        @db.Uuid
+  tool_name         String         @db.VarChar(200)
+  tool_arguments    Json           @default("{}")
+  result            Json?
+  error             String?        @db.VarChar(2000)
+  status            String         @db.VarChar(20)
+  execution_time_ms Int            @default(0)
+  created_at        DateTime       @db.Timestamptz(6)
+  updated_at        DateTime       @db.Timestamptz(6)
+  agents            agents         @relation(fields: [agent_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  clinics           clinics        @relation(fields: [clinic_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  agent_sessions    agent_sessions @relation(fields: [session_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  users             users?         @relation(fields: [supervisor_id], references: [id], onUpdate: NoAction)
+
+  @@index([agent_id], map: "ix_agent_audit_logs_agent_id")
+  @@index([clinic_id], map: "ix_agent_audit_logs_clinic_id")
+  @@index([session_id], map: "ix_agent_audit_logs_session_id")
+  @@index([tool_name], map: "ix_agent_audit_logs_tool_name")
+  @@index([clinic_id, created_at], map: "ix_audit_clinic_time")
+}
+
+model agent_sessions {
+  id                    String                  @id @db.Uuid
+  agent_id              String                  @db.Uuid
+  clinic_id             String                  @db.Uuid
+  supervisor_id         String?                 @db.Uuid
+  status                String                  @default("active") @db.VarChar(20)
+  session_metadata      Json                    @default("{}")
+  ended_at              DateTime?               @db.Timestamptz(6)
+  created_at            DateTime                @db.Timestamptz(6)
+  updated_at            DateTime                @db.Timestamptz(6)
+  agent_approval_queue  agent_approval_queue[]
+  agent_audit_logs      agent_audit_logs[]
+  agents                agents                  @relation(fields: [agent_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  clinics               clinics                 @relation(fields: [clinic_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  users                 users?                  @relation(fields: [supervisor_id], references: [id], onUpdate: NoAction)
+  copilot_conversations copilot_conversations[]
+
+  @@index([agent_id], map: "ix_agent_sessions_agent_id")
+  @@index([clinic_id], map: "ix_agent_sessions_clinic_id")
+}
+
+model agents {
+  id                   String                 @id @db.Uuid
+  clinic_id            String                 @db.Uuid
+  name                 String                 @db.VarChar(100)
+  type                 String                 @db.VarChar(100)
+  mode                 String                 @db.VarChar(20)
+  config               Json                   @default("{}")
+  status               String                 @default("active") @db.VarChar(20)
+  created_at           DateTime               @db.Timestamptz(6)
+  updated_at           DateTime               @db.Timestamptz(6)
+  agent_approval_queue agent_approval_queue[]
+  agent_audit_logs     agent_audit_logs[]
+  agent_sessions       agent_sessions[]
+  clinics              clinics                @relation(fields: [clinic_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@index([clinic_id], map: "ix_agents_clinic_id")
+  @@index([clinic_id, type], map: "ix_agents_clinic_type")
+}
+
+model alembic_version {
+  version_num String @id(map: "alembic_version_pkc") @db.VarChar(32)
+}
+
+model appointment_cabinet_events {
+  id                                                            String       @id @db.Uuid
+  clinic_id                                                     String       @db.Uuid
+  appointment_id                                                String       @db.Uuid
+  from_cabinet_id                                               String?      @db.Uuid
+  to_cabinet_id                                                 String?      @db.Uuid
+  changed_at                                                    DateTime     @default(now()) @db.Timestamptz(6)
+  changed_by                                                    String?      @db.Uuid
+  note                                                          String?
+  created_at                                                    DateTime     @default(now()) @db.Timestamptz(6)
+  appointments                                                  appointments @relation(fields: [appointment_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  users                                                         users?       @relation(fields: [changed_by], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  clinics                                                       clinics      @relation(fields: [clinic_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  cabinets_appointment_cabinet_events_from_cabinet_idTocabinets cabinets?    @relation("appointment_cabinet_events_from_cabinet_idTocabinets", fields: [from_cabinet_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  cabinets_appointment_cabinet_events_to_cabinet_idTocabinets   cabinets?    @relation("appointment_cabinet_events_to_cabinet_idTocabinets", fields: [to_cabinet_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@index([appointment_id, changed_at], map: "ix_appointment_cabinet_events_appointment_changed_at")
+  @@index([appointment_id], map: "ix_appointment_cabinet_events_appointment_id")
+  @@index([clinic_id], map: "ix_appointment_cabinet_events_clinic_id")
+}
+
+model appointment_status_events {
+  id             String       @id @db.Uuid
+  clinic_id      String       @db.Uuid
+  appointment_id String       @db.Uuid
+  from_status    String?      @db.VarChar(20)
+  to_status      String       @db.VarChar(20)
+  changed_at     DateTime     @default(now()) @db.Timestamptz(6)
+  changed_by     String?      @db.Uuid
+  note           String?
+  created_at     DateTime     @default(now()) @db.Timestamptz(6)
+  appointments   appointments @relation(fields: [appointment_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  users          users?       @relation(fields: [changed_by], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  clinics        clinics      @relation(fields: [clinic_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@index([appointment_id, changed_at], map: "ix_appointment_status_events_appointment_changed_at")
+  @@index([appointment_id], map: "ix_appointment_status_events_appointment_id")
+  @@index([clinic_id], map: "ix_appointment_status_events_clinic_id")
+}
+
+model appointment_treatments {
+  id                        String                   @id @db.Uuid
+  appointment_id            String                   @db.Uuid
+  planned_treatment_item_id String                   @db.Uuid
+  catalog_item_id           String?                  @db.Uuid
+  display_order             Int
+  created_at                DateTime                 @default(now()) @db.Timestamptz(6)
+  completed_in_appointment  Boolean
+  notes                     String?
+  appointments              appointments             @relation(fields: [appointment_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  treatment_catalog_items   treatment_catalog_items? @relation(fields: [catalog_item_id], references: [id], onUpdate: NoAction)
+  planned_treatment_items   planned_treatment_items  @relation(fields: [planned_treatment_item_id], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "fk_appointment_treatments_planned_item")
+
+  @@index([appointment_id], map: "ix_appointment_treatments_appointment_id")
+  @@index([planned_treatment_item_id], map: "ix_appointment_treatments_planned_treatment_item_id")
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+model appointments {
+  id                                            String                       @id @db.Uuid
+  clinic_id                                     String                       @db.Uuid
+  patient_id                                    String?                      @db.Uuid
+  professional_id                               String                       @db.Uuid
+  cabinet                                       String?                      @db.VarChar(50)
+  cabinet_id                                    String?                      @db.Uuid
+  start_time                                    DateTime                     @db.Timestamptz(6)
+  end_time                                      DateTime                     @db.Timestamptz(6)
+  treatment_type                                String?                      @db.VarChar(100)
+  status                                        String                       @db.VarChar(20)
+  color                                         String?                      @db.VarChar(7)
+  created_at                                    DateTime                     @db.Timestamptz(6)
+  updated_at                                    DateTime                     @db.Timestamptz(6)
+  current_status_since                          DateTime                     @default(now()) @db.Timestamptz(6)
+  cabinet_assigned_at                           DateTime?                    @db.Timestamptz(6)
+  cabinet_assigned_by                           String?                      @db.Uuid
+  appointment_cabinet_events                    appointment_cabinet_events[]
+  appointment_status_events                     appointment_status_events[]
+  appointment_treatments                        appointment_treatments[]
+  users_appointments_cabinet_assigned_byTousers users?                       @relation("appointments_cabinet_assigned_byTousers", fields: [cabinet_assigned_by], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  cabinets                                      cabinets?                    @relation(fields: [cabinet_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  clinics                                       clinics                      @relation(fields: [clinic_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  patients                                      patients?                    @relation(fields: [patient_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  users_appointments_professional_idTousers     users                        @relation("appointments_professional_idTousers", fields: [professional_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  recalls                                       recalls[]
+
+  @@index([cabinet_id], map: "ix_appointments_cabinet_id")
+  @@index([clinic_id], map: "ix_appointments_clinic_id")
+  @@index([start_time], map: "ix_appointments_start_time")
+}
+
+model auth_refresh_tokens {
+  id              String    @id @db.Uuid
+  user_id         String    @db.Uuid
+  family_id       String    @db.Uuid
+  issued_at       DateTime  @db.Timestamptz(6)
+  expires_at      DateTime  @db.Timestamptz(6)
+  revoked_at      DateTime? @db.Timestamptz(6)
+  replaced_by     String?   @db.Uuid
+  user_agent_hash String?   @db.VarChar(64)
+  last_ip         String?   @db.VarChar(64)
+  users           users     @relation(fields: [user_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@index([family_id], map: "ix_auth_refresh_tokens_family_id")
+  @@index([user_id], map: "ix_auth_refresh_tokens_user_id")
+}
+
+model budget_access_logs {
+  id               String   @id @db.Uuid
+  budget_id        String   @db.Uuid
+  attempted_at     DateTime @default(now()) @db.Timestamptz(6)
+  ip_hash          String   @db.VarChar(64)
+  success          Boolean
+  method_attempted String   @db.VarChar(20)
+  budgets          budgets  @relation(fields: [budget_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@index([budget_id, attempted_at], map: "idx_budget_access_logs_budget_attempted")
+}
+
+model budget_history {
+  id             String   @id @db.Uuid
+  clinic_id      String   @db.Uuid
+  budget_id      String   @db.Uuid
+  action         String   @db.VarChar(30)
+  changed_by     String   @db.Uuid
+  changed_at     DateTime @db.Timestamptz(6)
+  previous_state Json?
+  new_state      Json?
+  notes          String?
+  budgets        budgets  @relation(fields: [budget_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  users          users    @relation(fields: [changed_by], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  clinics        clinics  @relation(fields: [clinic_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@index([budget_id], map: "idx_budget_history_budget")
+  @@index([changed_at], map: "idx_budget_history_changed_at")
+  @@index([clinic_id], map: "idx_budget_history_clinic")
+  @@index([budget_id], map: "ix_budget_history_budget_id")
+  @@index([clinic_id], map: "ix_budget_history_clinic_id")
+}
+
+model budget_items {
+  id                      String                  @id @db.Uuid
+  clinic_id               String                  @db.Uuid
+  budget_id               String                  @db.Uuid
+  catalog_item_id         String                  @db.Uuid
+  unit_price              Decimal                 @db.Decimal(10, 2)
+  quantity                Int
+  discount_type           String?                 @db.VarChar(20)
+  discount_value          Decimal?                @db.Decimal(10, 2)
+  vat_type_id             String?                 @db.Uuid
+  vat_rate                Float
+  line_subtotal           Decimal                 @db.Decimal(10, 2)
+  line_discount           Decimal                 @db.Decimal(10, 2)
+  line_tax                Decimal                 @db.Decimal(10, 2)
+  line_total              Decimal                 @db.Decimal(10, 2)
+  tooth_number            Int?
+  surfaces                Json?
+  treatment_id            String?                 @db.Uuid
+  invoiced_quantity       Int
+  display_order           Int
+  notes                   String?
+  created_at              DateTime                @db.Timestamptz(6)
+  updated_at              DateTime                @db.Timestamptz(6)
+  budgets                 budgets                 @relation(fields: [budget_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  treatment_catalog_items treatment_catalog_items @relation(fields: [catalog_item_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  clinics                 clinics                 @relation(fields: [clinic_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  treatments              treatments?             @relation(fields: [treatment_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  vat_types               vat_types?              @relation(fields: [vat_type_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  invoice_items           invoice_items[]
+
+  @@index([budget_id], map: "idx_budget_items_budget")
+  @@index([catalog_item_id], map: "idx_budget_items_catalog")
+  @@index([budget_id, tooth_number], map: "idx_budget_items_tooth")
+  @@index([treatment_id], map: "idx_budget_items_treatment")
+  @@index([budget_id], map: "ix_budget_items_budget_id")
+  @@index([catalog_item_id], map: "ix_budget_items_catalog_item_id")
+  @@index([clinic_id], map: "ix_budget_items_clinic_id")
+  @@index([treatment_id], map: "ix_budget_items_treatment_id")
+  @@index([vat_type_id], map: "ix_budget_items_vat_type_id")
+}
+
+model budget_signatures {
+  id                      String   @id @db.Uuid
+  clinic_id               String   @db.Uuid
+  budget_id               String   @db.Uuid
+  signature_type          String   @db.VarChar(30)
+  signed_items            Json?
+  signed_by_name          String   @db.VarChar(200)
+  signed_by_email         String?  @db.VarChar(255)
+  relationship_to_patient String   @db.VarChar(30)
+  signature_method        String   @db.VarChar(30)
+  signature_data          Json?
+  ip_address              String?  @db.VarChar(45)
+  user_agent              String?
+  signed_at               DateTime @db.Timestamptz(6)
+  external_signature_id   String?  @db.VarChar(255)
+  external_provider       String?  @db.VarChar(50)
+  document_hash           String?  @db.VarChar(64)
+  created_at              DateTime @db.Timestamptz(6)
+  budgets                 budgets  @relation(fields: [budget_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  clinics                 clinics  @relation(fields: [clinic_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@index([budget_id], map: "idx_budget_signatures_budget")
+  @@index([clinic_id], map: "idx_budget_signatures_clinic")
+  @@index([budget_id], map: "ix_budget_signatures_budget_id")
+  @@index([clinic_id], map: "ix_budget_signatures_clinic_id")
+}
+
+model budgets {
+  id                                            String                @id @db.Uuid
+  clinic_id                                     String                @db.Uuid
+  patient_id                                    String                @db.Uuid
+  budget_number                                 String                @db.VarChar(50)
+  version                                       Int
+  parent_budget_id                              String?               @db.Uuid
+  status                                        String                @db.VarChar(30)
+  valid_from                                    DateTime              @db.Date
+  valid_until                                   DateTime?             @db.Date
+  created_by                                    String                @db.Uuid
+  assigned_professional_id                      String?               @db.Uuid
+  global_discount_type                          String?               @db.VarChar(20)
+  global_discount_value                         Decimal?              @db.Decimal(10, 2)
+  subtotal                                      Decimal               @db.Decimal(12, 2)
+  total_discount                                Decimal               @db.Decimal(12, 2)
+  total_tax                                     Decimal               @db.Decimal(12, 2)
+  total                                         Decimal               @db.Decimal(12, 2)
+  internal_notes                                String?
+  patient_notes                                 String?
+  insurance_estimate                            Decimal?              @db.Decimal(12, 2)
+  deleted_at                                    DateTime?             @db.Timestamptz(6)
+  created_at                                    DateTime              @db.Timestamptz(6)
+  updated_at                                    DateTime              @db.Timestamptz(6)
+  accepted_via                                  String?               @db.VarChar(20)
+  rejection_reason                              String?               @db.VarChar(50)
+  rejection_note                                String?
+  public_token                                  String                @unique(map: "idx_budgets_public_token") @db.Uuid
+  viewed_at                                     DateTime?             @db.Timestamptz(6)
+  last_reminder_sent_at                         DateTime?             @db.Timestamptz(6)
+  public_auth_method                            String                @db.VarChar(20)
+  public_auth_secret_hash                       String?               @db.VarChar(255)
+  public_locked_at                              DateTime?             @db.Timestamptz(6)
+  plan_number_snapshot                          String?               @db.VarChar(50)
+  plan_status_snapshot                          String?               @db.VarChar(20)
+  budget_access_logs                            budget_access_logs[]
+  budget_history                                budget_history[]
+  budget_items                                  budget_items[]
+  budget_signatures                             budget_signatures[]
+  users_budgets_assigned_professional_idTousers users?                @relation("budgets_assigned_professional_idTousers", fields: [assigned_professional_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  clinics                                       clinics               @relation(fields: [clinic_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  users_budgets_created_byTousers               users                 @relation("budgets_created_byTousers", fields: [created_by], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  budgets                                       budgets?              @relation("budgetsTobudgets", fields: [parent_budget_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  other_budgets                                 budgets[]             @relation("budgetsTobudgets")
+  patients                                      patients              @relation(fields: [patient_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  invoices                                      invoices[]
+  payment_allocations                           payment_allocations[]
+  treatment_plans                               treatment_plans?
+
+  @@unique([clinic_id, budget_number, version], map: "uq_budget_clinic_number_version")
+  @@index([clinic_id], map: "idx_budgets_clinic")
+  @@index([clinic_id, patient_id], map: "idx_budgets_clinic_patient")
+  @@index([clinic_id, status], map: "idx_budgets_clinic_status")
+  @@index([parent_budget_id], map: "idx_budgets_parent")
+  @@index([valid_until], map: "idx_budgets_valid_until")
+  @@index([clinic_id], map: "ix_budgets_clinic_id")
+  @@index([parent_budget_id], map: "ix_budgets_parent_budget_id")
+  @@index([patient_id], map: "ix_budgets_patient_id")
+}
+
+model cabinets {
+  id                                                                              String                       @id @db.Uuid
+  clinic_id                                                                       String                       @db.Uuid
+  name                                                                            String                       @db.VarChar(50)
+  color                                                                           String                       @db.VarChar(7)
+  display_order                                                                   Int
+  is_active                                                                       Boolean
+  created_at                                                                      DateTime                     @db.Timestamptz(6)
+  updated_at                                                                      DateTime                     @db.Timestamptz(6)
+  appointment_cabinet_events_appointment_cabinet_events_from_cabinet_idTocabinets appointment_cabinet_events[] @relation("appointment_cabinet_events_from_cabinet_idTocabinets")
+  appointment_cabinet_events_appointment_cabinet_events_to_cabinet_idTocabinets   appointment_cabinet_events[] @relation("appointment_cabinet_events_to_cabinet_idTocabinets")
+  appointments                                                                    appointments[]
+  clinics                                                                         clinics                      @relation(fields: [clinic_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@unique([clinic_id, name], map: "uq_cabinet_clinic_name")
+  @@index([clinic_id], map: "ix_cabinets_clinic_id")
+}
+
+model catalog_item_sessions {
+  id                      String                  @id @db.Uuid
+  catalog_item_id         String                  @db.Uuid
+  sequence                Int
+  labels                  Json                    @default("{}")
+  default_price           Decimal                 @db.Decimal(10, 2)
+  created_at              DateTime                @default(now()) @db.Timestamptz(6)
+  updated_at              DateTime                @default(now()) @db.Timestamptz(6)
+  treatment_catalog_items treatment_catalog_items @relation(fields: [catalog_item_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@unique([catalog_item_id, sequence], map: "uq_catalog_session_item_sequence")
+  @@index([catalog_item_id], map: "idx_catalog_sessions_item")
+}
+
+model clinic_channel_settings {
+  id           String   @id @db.Uuid
+  clinic_id    String   @db.Uuid
+  channel      String   @db.VarChar(20)
+  adapter_name String   @db.VarChar(50)
+  is_enabled   Boolean
+  is_verified  Boolean
+  config       Json?
+  created_at   DateTime @db.Timestamptz(6)
+  updated_at   DateTime @db.Timestamptz(6)
+  clinics      clinics  @relation(fields: [clinic_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@unique([clinic_id, channel], map: "uq_clinic_channel_settings_clinic_channel")
+  @@index([clinic_id], map: "idx_clinic_channel_settings_clinic")
+  @@index([clinic_id], map: "ix_clinic_channel_settings_clinic_id")
+}
+
+model clinic_memberships {
+  id              String   @id @db.Uuid
+  user_id         String   @db.Uuid
+  clinic_id       String   @db.Uuid
+  role            String   @db.VarChar(20)
+  created_at      DateTime @db.Timestamptz(6)
+  updated_at      DateTime @db.Timestamptz(6)
+  is_professional Boolean  @default(false)
+  role_id         String?  @db.Uuid
+  clinics         clinics  @relation(fields: [clinic_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  users           users    @relation(fields: [user_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  roles           roles?   @relation(fields: [role_id], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "fk_clinic_memberships_role_id")
+
+  @@unique([clinic_id, user_id], map: "uq_clinic_memberships_clinic_user")
+  @@index([clinic_id], map: "ix_clinic_memberships_clinic_id")
+  @@index([role_id], map: "ix_clinic_memberships_role_id")
+  @@index([user_id], map: "ix_clinic_memberships_user_id")
+}
+
+model clinic_notification_settings {
+  id                String   @id @db.Uuid
+  clinic_id         String   @unique(map: "ix_clinic_notification_settings_clinic_id") @db.Uuid
+  settings          Json
+  created_at        DateTime @db.Timestamptz(6)
+  updated_at        DateTime @db.Timestamptz(6)
+  preferred_channel String   @default("email") @db.VarChar(20)
+  fallback_enabled  Boolean  @default(true)
+  manual_channels   Json     @default("[\"email\"]")
+  sms_daily_limit   Int      @default(100)
+  clinics           clinics  @relation(fields: [clinic_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@index([clinic_id], map: "idx_clinic_notification_settings_clinic")
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+model clinic_overrides {
+  id              String            @id @db.Uuid
+  clinic_id       String            @db.Uuid
+  start_date      DateTime          @db.Date
+  end_date        DateTime          @db.Date
+  kind            String            @db.VarChar(20)
+  reason          String?           @db.VarChar(200)
+  created_at      DateTime          @db.Timestamptz(6)
+  updated_at      DateTime          @db.Timestamptz(6)
+  clinics         clinics           @relation(fields: [clinic_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  schedule_shifts schedule_shifts[]
+
+  @@index([clinic_id], map: "ix_clinic_overrides_clinic_id")
+  @@index([clinic_id, start_date, end_date], map: "ix_clinic_overrides_clinic_range")
+}
+
+model clinic_role_overrides {
+  id            String      @id @db.Uuid
+  clinic_id     String      @db.Uuid
+  role_id       String      @db.Uuid
+  permission_id String      @db.Uuid
+  granted       Boolean     @default(true)
+  created_at    DateTime    @db.Timestamptz(6)
+  updated_at    DateTime    @db.Timestamptz(6)
+  clinics       clinics     @relation(fields: [clinic_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  permissions   permissions @relation(fields: [permission_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  roles         roles       @relation(fields: [role_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@unique([clinic_id, role_id, permission_id], map: "uq_clinic_role_override")
+  @@index([clinic_id], map: "ix_clinic_role_overrides_clinic_id")
+  @@index([permission_id], map: "ix_clinic_role_overrides_permission_id")
+  @@index([role_id], map: "ix_clinic_role_overrides_role_id")
+}
+
+model clinic_smtp_settings {
+  id                 String    @id @db.Uuid
+  clinic_id          String    @unique(map: "ix_clinic_smtp_settings_clinic_id") @db.Uuid
+  provider           String    @db.VarChar(20)
+  host               String?   @db.VarChar(255)
+  port               Int
+  username           String?   @db.VarChar(255)
+  password_encrypted String?
+  use_tls            Boolean
+  use_ssl            Boolean
+  from_email         String?   @db.VarChar(255)
+  from_name          String?   @db.VarChar(255)
+  is_active          Boolean
+  is_verified        Boolean
+  last_verified_at   DateTime? @db.Timestamptz(6)
+  created_at         DateTime  @db.Timestamptz(6)
+  updated_at         DateTime  @db.Timestamptz(6)
+  clinics            clinics   @relation(fields: [clinic_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@index([clinic_id], map: "idx_clinic_smtp_settings_clinic")
+}
+
+model clinic_weekly_schedules {
+  id              String            @id @db.Uuid
+  clinic_id       String            @unique(map: "uq_clinic_weekly_schedule_clinic") @db.Uuid
+  is_active       Boolean
+  created_at      DateTime          @db.Timestamptz(6)
+  updated_at      DateTime          @db.Timestamptz(6)
+  clinics         clinics           @relation(fields: [clinic_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  schedule_shifts schedule_shifts[]
+
+  @@index([clinic_id], map: "ix_clinic_weekly_schedules_clinic_id")
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+model clinical_notes {
+  id           String    @id @db.Uuid
+  clinic_id    String    @db.Uuid
+  owner_type   String    @db.VarChar(20)
+  owner_id     String    @db.Uuid
+  body         String
+  author_id    String    @db.Uuid
+  deleted_at   DateTime? @db.Timestamptz(6)
+  created_at   DateTime  @db.Timestamptz(6)
+  updated_at   DateTime  @db.Timestamptz(6)
+  note_type    String    @db.VarChar(40)
+  tooth_number Int?
+  users        users     @relation(fields: [author_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  clinics      clinics   @relation(fields: [clinic_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@index([author_id], map: "idx_clinical_notes_author")
+  @@index([clinic_id, owner_type, owner_id, deleted_at, created_at], map: "idx_clinical_notes_owner")
+  @@index([clinic_id, note_type, owner_id, deleted_at, created_at], map: "idx_clinical_notes_patient_recent")
+  @@index([clinic_id], map: "ix_clinical_notes_clinic_id")
+}
+
+model clinics {
+  id                                  String                                @id @db.Uuid
+  name                                String                                @db.VarChar(200)
+  tax_id                              String                                @db.VarChar(20)
+  address                             Json?
+  phone                               String?                               @db.VarChar(20)
+  email                               String?                               @db.VarChar(255)
+  settings                            Json
+  created_at                          DateTime                              @db.Timestamptz(6)
+  updated_at                          DateTime                              @db.Timestamptz(6)
+  timezone                            String                                @default("Europe/Madrid") @db.VarChar(64)
+  legal_name                          String?                               @db.VarChar(200)
+  currency                            String                                @default("EUR") @db.VarChar(3)
+  agent_approval_queue                agent_approval_queue[]
+  agent_audit_logs                    agent_audit_logs[]
+  agent_sessions                      agent_sessions[]
+  agents                              agents[]
+  appointment_cabinet_events          appointment_cabinet_events[]
+  appointment_status_events           appointment_status_events[]
+  appointments                        appointments[]
+  budget_history                      budget_history[]
+  budget_items                        budget_items[]
+  budget_signatures                   budget_signatures[]
+  budgets                             budgets[]
+  cabinets                            cabinets[]
+  clinic_channel_settings             clinic_channel_settings[]
+  clinic_memberships                  clinic_memberships[]
+  clinic_notification_settings        clinic_notification_settings?
+  clinic_overrides                    clinic_overrides[]
+  clinic_role_overrides               clinic_role_overrides[]
+  clinic_smtp_settings                clinic_smtp_settings?
+  clinic_weekly_schedules             clinic_weekly_schedules?
+  clinical_notes                      clinical_notes[]
+  communication_messages              communication_messages[]
+  copilot_conversations               copilot_conversations[]
+  copilot_nudges                      copilot_nudges[]
+  copilot_settings                    copilot_settings?
+  documents                           documents[]
+  invoice_history                     invoice_history[]
+  invoice_items                       invoice_items[]
+  invoice_payments                    invoice_payments[]
+  invoice_series                      invoice_series[]
+  invoice_series_history              invoice_series_history[]
+  invoices                            invoices[]
+  media_attachments                   media_attachments[]
+  notification_preferences            notification_preferences[]
+  notification_push_subscribe_tokens  notification_push_subscribe_tokens[]
+  notification_push_subscriptions     notification_push_subscriptions[]
+  notification_templates              notification_templates[]
+  odontogram_history                  odontogram_history[]
+  patient_earned_entries              patient_earned_entries[]
+  patient_timeline                    patient_timeline[]
+  patients                            patients[]
+  patients_clinical_allergy           patients_clinical_allergy[]
+  patients_clinical_emergency_contact patients_clinical_emergency_contact[]
+  patients_clinical_legal_guardian    patients_clinical_legal_guardian[]
+  patients_clinical_medical_context   patients_clinical_medical_context[]
+  patients_clinical_medication        patients_clinical_medication[]
+  patients_clinical_surgical_history  patients_clinical_surgical_history[]
+  patients_clinical_systemic_disease  patients_clinical_systemic_disease[]
+  payment_allocations                 payment_allocations[]
+  payment_history                     payment_history[]
+  payments                            payments[]
+  planned_treatment_items             planned_treatment_items[]
+  professional_overrides              professional_overrides[]
+  professional_weekly_schedules       professional_weekly_schedules[]
+  recall_contact_attempts             recall_contact_attempts[]
+  recall_settings                     recall_settings?
+  recalls                             recalls[]
+  refunds                             refunds[]
+  roles                               roles[]
+  tooth_records                       tooth_records[]
+  treatment_catalog_items             treatment_catalog_items[]
+  treatment_categories                treatment_categories[]
+  treatment_odontogram_mappings       treatment_odontogram_mappings[]
+  treatment_plans                     treatment_plans[]
+  treatments                          treatments[]
+  vat_types                           vat_types[]
+}
+
+model communication_messages {
+  id                   String    @id(map: "email_logs_pkey") @db.Uuid
+  clinic_id            String    @db.Uuid
+  to_address           String    @db.VarChar(255)
+  patient_id           String?   @db.Uuid
+  template_key         String    @db.VarChar(100)
+  subject              String?   @db.VarChar(255)
+  status               String    @db.VarChar(20)
+  provider             String?   @db.VarChar(50)
+  provider_message_id  String?   @db.VarChar(255)
+  error_message        String?
+  created_at           DateTime  @db.Timestamptz(6)
+  sent_at              DateTime? @db.Timestamptz(6)
+  triggered_by_event   String?   @db.VarChar(100)
+  triggered_by_user_id String?   @db.Uuid
+  context_data         Json?
+  channel              String    @db.VarChar(20)
+  message_kind         String    @db.VarChar(20)
+  attempts             Int
+  max_attempts         Int
+  next_attempt_at      DateTime? @db.Timestamptz(6)
+  dedup_key            String?   @db.VarChar(200)
+  delivered_at         DateTime? @db.Timestamptz(6)
+  read_at              DateTime? @db.Timestamptz(6)
+  updated_at           DateTime  @db.Timestamptz(6)
+  direction            String    @db.VarChar(20)
+  body_text            String?
+  clinics              clinics   @relation(fields: [clinic_id], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "email_logs_clinic_id_fkey")
+  patients             patients? @relation(fields: [patient_id], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "email_logs_patient_id_fkey")
+  users                users?    @relation(fields: [triggered_by_user_id], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "email_logs_triggered_by_user_id_fkey")
+
+  @@index([clinic_id], map: "idx_communication_messages_clinic")
+  @@index([created_at], map: "idx_communication_messages_created_at")
+  @@index([status, next_attempt_at], map: "idx_communication_messages_dispatch")
+  @@index([patient_id], map: "idx_communication_messages_patient")
+  @@index([status], map: "idx_communication_messages_status")
+  @@index([template_key], map: "idx_communication_messages_template")
+  @@index([clinic_id, patient_id, channel, created_at], map: "idx_communication_messages_thread")
+  @@index([clinic_id], map: "ix_communication_messages_clinic_id")
+  @@index([patient_id], map: "ix_communication_messages_patient_id")
+  @@index([status], map: "ix_communication_messages_status")
+  @@index([triggered_by_user_id], map: "ix_communication_messages_triggered_by_user_id")
+}
+
+model copilot_conversations {
+  id                  String             @id @db.Uuid
+  clinic_id           String             @db.Uuid
+  user_id             String             @db.Uuid
+  session_id          String?            @db.Uuid
+  title               String?            @db.VarChar(200)
+  context             Json               @default("{}")
+  provider            String             @db.VarChar(20)
+  model               String             @db.VarChar(100)
+  status              String             @default("active") @db.VarChar(20)
+  total_input_tokens  Int                @default(0)
+  total_output_tokens Int                @default(0)
+  cost_cents          Int                @default(0)
+  created_at          DateTime           @default(now()) @db.Timestamptz(6)
+  updated_at          DateTime           @default(now()) @db.Timestamptz(6)
+  redaction_salt      String?            @db.VarChar(64)
+  clinics             clinics            @relation(fields: [clinic_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  agent_sessions      agent_sessions?    @relation(fields: [session_id], references: [id], onUpdate: NoAction)
+  users               users              @relation(fields: [user_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  copilot_messages    copilot_messages[]
+
+  @@index([clinic_id], map: "ix_copilot_conversations_clinic_id")
+  @@index([user_id], map: "ix_copilot_conversations_user_id")
+}
+
+model copilot_messages {
+  id                    String                @id @db.Uuid
+  conversation_id       String                @db.Uuid
+  clinic_id             String                @db.Uuid
+  seq                   Int                   @default(0)
+  role                  String                @db.VarChar(20)
+  content               Json                  @default("[]")
+  input_tokens          Int                   @default(0)
+  output_tokens         Int                   @default(0)
+  created_at            DateTime              @default(now()) @db.Timestamptz(6)
+  copilot_conversations copilot_conversations @relation(fields: [conversation_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@index([clinic_id], map: "ix_copilot_messages_clinic_id")
+  @@index([conversation_id], map: "ix_copilot_messages_conversation_id")
+}
+
+model copilot_nudges {
+  id                  String   @id @db.Uuid
+  clinic_id           String   @db.Uuid
+  kind                String   @db.VarChar(50)
+  payload             Json     @default("{}")
+  required_permission String?  @db.VarChar(100)
+  status              String   @default("pending") @db.VarChar(20)
+  dedupe_key          String   @db.VarChar(200)
+  created_at          DateTime @default(now()) @db.Timestamptz(6)
+  expires_at          DateTime @db.Timestamptz(6)
+  clinics             clinics  @relation(fields: [clinic_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@unique([clinic_id, dedupe_key], map: "uq_copilot_nudge_dedupe")
+  @@index([clinic_id], map: "ix_copilot_nudges_clinic_id")
+}
+
+model copilot_settings {
+  clinic_id                 String   @id @db.Uuid
+  provider                  String   @db.VarChar(20)
+  model                     String   @db.VarChar(100)
+  redaction_enabled         Boolean
+  monthly_token_limit       Int?
+  monthly_cost_limit_cents  Int?
+  period_start              DateTime @db.Date
+  period_input_tokens       Int      @default(0)
+  period_output_tokens      Int      @default(0)
+  period_cost_cents         Int      @default(0)
+  updated_at                DateTime @default(now()) @db.Timestamptz(6)
+  digest_enabled            Boolean  @default(false)
+  digest_hour               Int      @default(8) @db.SmallInt
+  digest_recipient_user_ids Json     @default("[]")
+  clinics                   clinics  @relation(fields: [clinic_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+}
+
+model core_external_id {
+  id          String   @id @db.Uuid
+  module_name String   @db.VarChar(100)
+  xml_id      String   @db.VarChar(255)
+  table_name  String   @db.VarChar(100)
+  record_id   String   @db.Uuid
+  noupdate    Boolean
+  created_at  DateTime @default(now()) @db.Timestamptz(6)
+
+  @@unique([module_name, xml_id], map: "uq_core_external_id_module_xml")
+  @@index([module_name], map: "ix_core_external_id_module")
+  @@index([table_name, record_id], map: "ix_core_external_id_table_record")
+}
+
+model core_module {
+  name                      String                      @id @db.VarChar(100)
+  version                   String                      @db.VarChar(50)
+  state                     String                      @db.VarChar(30)
+  category                  String                      @db.VarChar(20)
+  removable                 Boolean
+  auto_install              Boolean
+  installed_at              DateTime?                   @db.Timestamptz(6)
+  last_state_change         DateTime                    @default(now()) @db.Timestamptz(6)
+  base_revision             String?                     @db.VarChar(64)
+  applied_revision          String?                     @db.VarChar(64)
+  manifest_snapshot         Json
+  error_message             String?
+  error_at                  DateTime?                   @db.Timestamptz(6)
+  core_module_operation_log core_module_operation_log[]
+}
+
+model core_module_operation_log {
+  id          BigInt      @id @default(autoincrement())
+  module_name String      @db.VarChar(100)
+  operation   String      @db.VarChar(30)
+  step        String      @db.VarChar(30)
+  status      String      @db.VarChar(20)
+  details     Json?
+  created_at  DateTime    @default(now()) @db.Timestamptz(6)
+  core_module core_module @relation(fields: [module_name], references: [name], onDelete: Cascade, onUpdate: NoAction)
+
+  @@index([created_at], map: "ix_core_module_operation_log_created")
+  @@index([module_name], map: "ix_core_module_operation_log_module")
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+model documents {
+  id                 String              @id @db.Uuid
+  clinic_id          String              @db.Uuid
+  patient_id         String              @db.Uuid
+  document_type      String              @db.VarChar(30)
+  title              String              @db.VarChar(255)
+  description        String?
+  original_filename  String              @db.VarChar(255)
+  storage_path       String              @unique @db.VarChar(500)
+  mime_type          String              @db.VarChar(100)
+  file_size          Int
+  extra_data         Json?
+  uploaded_by        String              @db.Uuid
+  status             String              @db.VarChar(20)
+  created_at         DateTime            @db.Timestamptz(6)
+  updated_at         DateTime            @db.Timestamptz(6)
+  media_kind         String              @default("document") @db.VarChar(20)
+  media_category     String?             @db.VarChar(20)
+  media_subtype      String?             @db.VarChar(40)
+  captured_at        DateTime?           @db.Timestamptz(6)
+  paired_document_id String?             @db.Uuid
+  tags               Json                @default("[]")
+  clinics            clinics             @relation(fields: [clinic_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  patients           patients            @relation(fields: [patient_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  users              users               @relation(fields: [uploaded_by], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  documents          documents?          @relation("documentsTodocuments", fields: [paired_document_id], references: [id], onUpdate: NoAction, map: "fk_documents_paired_document_id")
+  other_documents    documents[]         @relation("documentsTodocuments")
+  media_attachments  media_attachments[]
+
+  @@index([clinic_id, patient_id], map: "idx_documents_clinic_patient")
+  @@index([clinic_id, patient_id, media_kind, captured_at], map: "idx_documents_clinic_patient_kind_captured")
+  @@index([clinic_id, document_type], map: "idx_documents_type")
+  @@index([clinic_id], map: "ix_documents_clinic_id")
+  @@index([patient_id], map: "ix_documents_patient_id")
+}
+
+model invoice_history {
+  id             String   @id @db.Uuid
+  clinic_id      String   @db.Uuid
+  invoice_id     String   @db.Uuid
+  action         String   @db.VarChar(50)
+  changed_by     String   @db.Uuid
+  changed_at     DateTime @db.Timestamptz(6)
+  previous_state Json?
+  new_state      Json?
+  notes          String?
+  users          users    @relation(fields: [changed_by], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  clinics        clinics  @relation(fields: [clinic_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  invoices       invoices @relation(fields: [invoice_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@index([changed_at], map: "idx_invoice_history_changed_at")
+  @@index([clinic_id], map: "idx_invoice_history_clinic")
+  @@index([invoice_id], map: "idx_invoice_history_invoice")
+  @@index([clinic_id], map: "ix_invoice_history_clinic_id")
+  @@index([invoice_id], map: "ix_invoice_history_invoice_id")
+}
+
+model invoice_items {
+  id                      String                   @id @db.Uuid
+  clinic_id               String                   @db.Uuid
+  invoice_id              String                   @db.Uuid
+  budget_item_id          String?                  @db.Uuid
+  catalog_item_id         String?                  @db.Uuid
+  description             String                   @db.VarChar(500)
+  internal_code           String?                  @db.VarChar(50)
+  unit_price              Decimal                  @db.Decimal(10, 2)
+  quantity                Int
+  discount_type           String?                  @db.VarChar(20)
+  discount_value          Decimal?                 @db.Decimal(10, 2)
+  vat_type_id             String?                  @db.Uuid
+  vat_rate                Float
+  vat_exempt_reason       String?                  @db.VarChar(200)
+  line_subtotal           Decimal                  @db.Decimal(10, 2)
+  line_discount           Decimal                  @db.Decimal(10, 2)
+  line_tax                Decimal                  @db.Decimal(10, 2)
+  line_total              Decimal                  @db.Decimal(10, 2)
+  tooth_number            Int?
+  surfaces                Json?
+  display_order           Int
+  created_at              DateTime                 @db.Timestamptz(6)
+  updated_at              DateTime                 @db.Timestamptz(6)
+  budget_items            budget_items?            @relation(fields: [budget_item_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  treatment_catalog_items treatment_catalog_items? @relation(fields: [catalog_item_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  clinics                 clinics                  @relation(fields: [clinic_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  invoices                invoices                 @relation(fields: [invoice_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  vat_types               vat_types?               @relation(fields: [vat_type_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@index([budget_item_id], map: "idx_invoice_items_budget_item")
+  @@index([catalog_item_id], map: "idx_invoice_items_catalog_item")
+  @@index([invoice_id], map: "idx_invoice_items_invoice")
+  @@index([budget_item_id], map: "ix_invoice_items_budget_item_id")
+  @@index([catalog_item_id], map: "ix_invoice_items_catalog_item_id")
+  @@index([clinic_id], map: "ix_invoice_items_clinic_id")
+  @@index([invoice_id], map: "ix_invoice_items_invoice_id")
+  @@index([vat_type_id], map: "ix_invoice_items_vat_type_id")
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+model invoice_payments {
+  id         String   @id @db.Uuid
+  clinic_id  String   @db.Uuid
+  invoice_id String   @db.Uuid
+  payment_id String   @db.Uuid
+  amount     Decimal  @db.Decimal(12, 2)
+  created_by String   @db.Uuid
+  created_at DateTime @db.Timestamptz(6)
+  updated_at DateTime @db.Timestamptz(6)
+  clinics    clinics  @relation(fields: [clinic_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  users      users    @relation(fields: [created_by], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  invoices   invoices @relation(fields: [invoice_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  payments   payments @relation(fields: [payment_id], references: [id], onUpdate: NoAction)
+
+  @@index([clinic_id, invoice_id], map: "idx_invpay_clinic_invoice")
+  @@index([payment_id], map: "idx_invpay_payment")
+}
+
+model invoice_series {
+  id                     String                   @id @db.Uuid
+  clinic_id              String                   @db.Uuid
+  prefix                 String                   @db.VarChar(20)
+  series_type            String                   @db.VarChar(20)
+  description            String?                  @db.VarChar(200)
+  current_number         Int
+  reset_yearly           Boolean
+  last_reset_year        Int?
+  is_default             Boolean
+  is_active              Boolean
+  created_at             DateTime                 @db.Timestamptz(6)
+  updated_at             DateTime                 @db.Timestamptz(6)
+  clinics                clinics                  @relation(fields: [clinic_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  invoice_series_history invoice_series_history[]
+  invoices               invoices[]
+
+  @@unique([clinic_id, prefix], map: "uq_invoice_series_clinic_prefix")
+  @@index([clinic_id], map: "idx_invoice_series_clinic")
+  @@index([clinic_id, series_type], map: "idx_invoice_series_clinic_type")
+  @@index([clinic_id], map: "ix_invoice_series_clinic_id")
+}
+
+model invoice_series_history {
+  id             String         @id @db.Uuid
+  clinic_id      String         @db.Uuid
+  series_id      String         @db.Uuid
+  action         String         @db.VarChar(50)
+  changed_by     String         @db.Uuid
+  changed_at     DateTime       @db.Timestamptz(6)
+  previous_state Json?
+  new_state      Json?
+  notes          String?
+  users          users          @relation(fields: [changed_by], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  clinics        clinics        @relation(fields: [clinic_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  invoice_series invoice_series @relation(fields: [series_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@index([changed_at], map: "idx_invoice_series_history_changed_at")
+  @@index([clinic_id], map: "idx_invoice_series_history_clinic")
+  @@index([series_id], map: "idx_invoice_series_history_series")
+  @@index([clinic_id], map: "ix_invoice_series_history_clinic_id")
+  @@index([series_id], map: "ix_invoice_series_history_series_id")
+}
+
+model invoices {
+  id                               String             @id @db.Uuid
+  clinic_id                        String             @db.Uuid
+  patient_id                       String             @db.Uuid
+  invoice_number                   String?            @db.VarChar(50)
+  series_id                        String?            @db.Uuid
+  sequential_number                Int?
+  budget_id                        String?            @db.Uuid
+  credit_note_for_id               String?            @db.Uuid
+  status                           String             @db.VarChar(20)
+  issue_date                       DateTime?          @db.Date
+  due_date                         DateTime?          @db.Date
+  payment_term_days                Int
+  billing_name                     String?            @db.VarChar(200)
+  billing_tax_id                   String?            @db.VarChar(50)
+  billing_address                  Json?
+  billing_email                    String?            @db.VarChar(255)
+  subtotal                         Decimal            @db.Decimal(12, 2)
+  total_discount                   Decimal            @db.Decimal(12, 2)
+  total_tax                        Decimal            @db.Decimal(12, 2)
+  total                            Decimal            @db.Decimal(12, 2)
+  internal_notes                   String?
+  public_notes                     String?
+  compliance_data                  Json?
+  document_hash                    String?            @db.VarChar(64)
+  previous_hash                    String?            @db.VarChar(64)
+  created_by                       String             @db.Uuid
+  issued_by                        String?            @db.Uuid
+  deleted_at                       DateTime?          @db.Timestamptz(6)
+  created_at                       DateTime           @db.Timestamptz(6)
+  updated_at                       DateTime           @db.Timestamptz(6)
+  pdf_stale                        Boolean
+  fiscal_year                      Int?
+  invoice_history                  invoice_history[]
+  invoice_items                    invoice_items[]
+  invoice_payments                 invoice_payments[]
+  budgets                          budgets?           @relation(fields: [budget_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  clinics                          clinics            @relation(fields: [clinic_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  users_invoices_created_byTousers users              @relation("invoices_created_byTousers", fields: [created_by], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  invoices                         invoices?          @relation("invoicesToinvoices", fields: [credit_note_for_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  other_invoices                   invoices[]         @relation("invoicesToinvoices")
+  users_invoices_issued_byTousers  users?             @relation("invoices_issued_byTousers", fields: [issued_by], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  patients                         patients           @relation(fields: [patient_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  invoice_series                   invoice_series?    @relation(fields: [series_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@index([budget_id], map: "idx_invoices_budget")
+  @@index([clinic_id], map: "idx_invoices_clinic")
+  @@index([clinic_id, due_date], map: "idx_invoices_clinic_due_date")
+  @@index([clinic_id, issue_date], map: "idx_invoices_clinic_issue_date")
+  @@index([clinic_id, patient_id], map: "idx_invoices_clinic_patient")
+  @@index([clinic_id, status], map: "idx_invoices_clinic_status")
+  @@index([credit_note_for_id], map: "idx_invoices_credit_note_for")
+  @@index([series_id], map: "idx_invoices_series")
+  @@index([budget_id], map: "ix_invoices_budget_id")
+  @@index([clinic_id], map: "ix_invoices_clinic_id")
+  @@index([credit_note_for_id], map: "ix_invoices_credit_note_for_id")
+  @@index([patient_id], map: "ix_invoices_patient_id")
+  @@index([series_id], map: "ix_invoices_series_id")
+}
+
+model media_attachments {
+  id            String    @id @db.Uuid
+  clinic_id     String    @db.Uuid
+  document_id   String    @db.Uuid
+  owner_type    String    @db.VarChar(40)
+  owner_id      String    @db.Uuid
+  display_order Int       @default(0)
+  created_at    DateTime  @db.Timestamptz(6)
+  updated_at    DateTime  @db.Timestamptz(6)
+  clinics       clinics   @relation(fields: [clinic_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  documents     documents @relation(fields: [document_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@unique([document_id, owner_type, owner_id], map: "uq_media_attachments_doc_owner")
+  @@index([clinic_id, owner_type, owner_id], map: "idx_media_attachments_owner")
+  @@index([clinic_id], map: "ix_media_attachments_clinic_id")
+  @@index([document_id], map: "ix_media_attachments_document_id")
+}
+
+model module_default_role_permissions {
+  id            String      @id @db.Uuid
+  module        String      @db.VarChar(100)
+  role          String      @db.VarChar(50)
+  permission_id String      @db.Uuid
+  created_at    DateTime    @db.Timestamptz(6)
+  updated_at    DateTime    @db.Timestamptz(6)
+  permissions   permissions @relation(fields: [permission_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@unique([module, role, permission_id], map: "uq_module_role_permission")
+  @@index([permission_id], map: "ix_module_default_role_permissions_permission_id")
+}
+
+model notification_preferences {
+  id                 String    @id @db.Uuid
+  clinic_id          String    @db.Uuid
+  patient_id         String?   @db.Uuid
+  user_id            String?   @db.Uuid
+  email_enabled      Boolean
+  preferences        Json
+  preferred_locale   String    @db.VarChar(5)
+  created_at         DateTime  @db.Timestamptz(6)
+  updated_at         DateTime  @db.Timestamptz(6)
+  whatsapp_enabled   Boolean   @default(true)
+  whatsapp_opt_in_at DateTime? @db.Timestamptz(6)
+  last_inbound_at    DateTime? @db.Timestamptz(6)
+  sms_enabled        Boolean   @default(true)
+  sms_opt_in_at      DateTime? @db.Timestamptz(6)
+  push_enabled       Boolean   @default(true)
+  clinics            clinics   @relation(fields: [clinic_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  patients           patients? @relation(fields: [patient_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  users              users?    @relation(fields: [user_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@unique([clinic_id, patient_id], map: "uq_notification_pref_clinic_patient")
+  @@unique([clinic_id, user_id], map: "uq_notification_pref_clinic_user")
+  @@index([clinic_id], map: "idx_notification_preferences_clinic")
+  @@index([patient_id], map: "idx_notification_preferences_patient")
+  @@index([user_id], map: "idx_notification_preferences_user")
+  @@index([clinic_id], map: "ix_notification_preferences_clinic_id")
+  @@index([patient_id], map: "ix_notification_preferences_patient_id")
+  @@index([user_id], map: "ix_notification_preferences_user_id")
+}
+
+model notification_push_subscribe_tokens {
+  id         String    @id @db.Uuid
+  clinic_id  String    @db.Uuid
+  patient_id String    @db.Uuid
+  token      String    @unique(map: "uq_push_subscribe_tokens_token") @db.Uuid
+  expires_at DateTime  @db.Timestamptz(6)
+  used_at    DateTime? @db.Timestamptz(6)
+  created_at DateTime  @default(now()) @db.Timestamptz(6)
+  updated_at DateTime  @default(now()) @db.Timestamptz(6)
+  clinics    clinics   @relation(fields: [clinic_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  patients   patients  @relation(fields: [patient_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@index([clinic_id], map: "ix_push_subscribe_tokens_clinic_id")
+  @@index([patient_id], map: "ix_push_subscribe_tokens_patient_id")
+}
+
+model notification_push_subscriptions {
+  id         String   @id @db.Uuid
+  clinic_id  String   @db.Uuid
+  patient_id String   @db.Uuid
+  endpoint   String   @db.VarChar(500)
+  keys       Json
+  user_agent String?  @db.VarChar(500)
+  created_at DateTime @default(now()) @db.Timestamptz(6)
+  updated_at DateTime @default(now()) @db.Timestamptz(6)
+  clinics    clinics  @relation(fields: [clinic_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  patients   patients @relation(fields: [patient_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@unique([clinic_id, endpoint], map: "uq_push_subscriptions_clinic_endpoint")
+  @@index([clinic_id], map: "ix_push_subscriptions_clinic_id")
+  @@index([clinic_id, patient_id], map: "ix_push_subscriptions_clinic_patient")
+}
+
+model notification_templates {
+  id                       String   @id(map: "email_templates_pkey") @db.Uuid
+  clinic_id                String?  @db.Uuid
+  template_key             String   @db.VarChar(100)
+  locale                   String   @db.VarChar(5)
+  subject                  String?  @db.VarChar(255)
+  body_html                String?
+  body_text                String?
+  variables                Json?
+  description              String?  @db.VarChar(500)
+  is_system                Boolean
+  is_active                Boolean
+  created_at               DateTime @db.Timestamptz(6)
+  updated_at               DateTime @db.Timestamptz(6)
+  channel                  String   @db.VarChar(20)
+  provider_template_name   String?  @db.VarChar(200)
+  provider_template_status String?  @db.VarChar(20)
+  clinics                  clinics? @relation(fields: [clinic_id], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "email_templates_clinic_id_fkey")
+
+  @@unique([clinic_id, template_key, locale, channel], map: "uq_notification_template_clinic_key_locale_channel")
+  @@index([clinic_id], map: "idx_notification_templates_clinic")
+  @@index([template_key], map: "idx_notification_templates_key")
+  @@index([channel], map: "ix_notification_templates_channel")
+  @@index([clinic_id], map: "ix_notification_templates_clinic_id")
+  @@index([template_key], map: "ix_notification_templates_template_key")
+}
+
+model odontogram_history {
+  id            String   @id @db.Uuid
+  clinic_id     String   @db.Uuid
+  patient_id    String   @db.Uuid
+  tooth_number  Int
+  change_type   String   @db.VarChar(30)
+  surface       String?  @db.VarChar(1)
+  old_condition String?  @db.VarChar(30)
+  new_condition String?  @db.VarChar(30)
+  notes         String?
+  changed_by    String   @db.Uuid
+  changed_at    DateTime @db.Timestamptz(6)
+  users         users    @relation(fields: [changed_by], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  clinics       clinics  @relation(fields: [clinic_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  patients      patients @relation(fields: [patient_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@index([patient_id], map: "idx_odontogram_history_patient")
+  @@index([patient_id, tooth_number], map: "idx_odontogram_history_tooth")
+  @@index([clinic_id], map: "ix_odontogram_history_clinic_id")
+  @@index([patient_id], map: "ix_odontogram_history_patient_id")
+}
+
+model patient_earned_entries {
+  id                String   @id @db.Uuid
+  clinic_id         String   @db.Uuid
+  patient_id        String   @db.Uuid
+  treatment_id      String   @db.Uuid
+  catalog_item_id   String?  @db.Uuid
+  amount            Decimal  @db.Decimal(10, 2)
+  performed_at      DateTime @db.Timestamptz(6)
+  professional_id   String?  @db.Uuid
+  source_event      String   @db.VarChar(50)
+  created_at        DateTime @db.Timestamptz(6)
+  updated_at        DateTime @db.Timestamptz(6)
+  source_session_id String?  @db.Uuid
+  description       String?  @db.VarChar(160)
+  clinics           clinics  @relation(fields: [clinic_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  patients          patients @relation(fields: [patient_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@unique([treatment_id, source_session_id], map: "uq_earned_treatment_session")
+  @@index([clinic_id, patient_id], map: "idx_earned_clinic_patient")
+  @@index([clinic_id, performed_at], map: "idx_earned_clinic_performed")
+  @@index([source_session_id], map: "ix_patient_earned_entries_source_session_id")
+}
+
+model patient_timeline {
+  id             String   @id @db.Uuid
+  clinic_id      String   @db.Uuid
+  patient_id     String   @db.Uuid
+  event_type     String   @db.VarChar(50)
+  event_category String   @db.VarChar(30)
+  source_table   String   @db.VarChar(50)
+  source_id      String   @db.Uuid
+  title          String   @db.VarChar(200)
+  description    String?
+  event_data     Json?
+  occurred_at    DateTime @db.Timestamptz(6)
+  created_by     String?  @db.Uuid
+  clinics        clinics  @relation(fields: [clinic_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  users          users?   @relation(fields: [created_by], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  patients       patients @relation(fields: [patient_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@index([clinic_id, patient_id], map: "idx_timeline_clinic_patient")
+  @@index([patient_id, occurred_at], map: "idx_timeline_patient_date")
+  @@index([clinic_id], map: "ix_patient_timeline_clinic_id")
+  @@index([occurred_at], map: "ix_patient_timeline_occurred_at")
+  @@index([patient_id], map: "ix_patient_timeline_patient_id")
+}
+
+model patients {
+  id                                  String                               @id @db.Uuid
+  clinic_id                           String                               @db.Uuid
+  first_name                          String                               @db.VarChar(100)
+  last_name                           String                               @db.VarChar(100)
+  phone                               String?                              @db.VarChar(20)
+  email                               String?                              @db.VarChar(255)
+  date_of_birth                       DateTime?                            @db.Date
+  notes                               String?
+  status                              String                               @db.VarChar(20)
+  gender                              String?                              @db.VarChar(20)
+  national_id                         String?                              @db.VarChar(50)
+  national_id_type                    String?                              @db.VarChar(20)
+  profession                          String?                              @db.VarChar(100)
+  workplace                           String?                              @db.VarChar(200)
+  preferred_language                  String                               @db.VarChar(10)
+  address                             Json?
+  photo_url                           String?                              @db.VarChar(500)
+  billing_name                        String?                              @db.VarChar(200)
+  billing_tax_id                      String?                              @db.VarChar(50)
+  billing_address                     Json?
+  billing_email                       String?                              @db.VarChar(255)
+  created_at                          DateTime                             @db.Timestamptz(6)
+  updated_at                          DateTime                             @db.Timestamptz(6)
+  do_not_contact                      Boolean
+  appointments                        appointments[]
+  budgets                             budgets[]
+  communication_messages              communication_messages[]
+  documents                           documents[]
+  invoices                            invoices[]
+  notification_preferences            notification_preferences[]
+  notification_push_subscribe_tokens  notification_push_subscribe_tokens[]
+  notification_push_subscriptions     notification_push_subscriptions[]
+  odontogram_history                  odontogram_history[]
+  patient_earned_entries              patient_earned_entries[]
+  patient_timeline                    patient_timeline[]
+  clinics                             clinics                              @relation(fields: [clinic_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  patients_clinical_allergy           patients_clinical_allergy[]
+  patients_clinical_emergency_contact patients_clinical_emergency_contact?
+  patients_clinical_legal_guardian    patients_clinical_legal_guardian?
+  patients_clinical_medical_context   patients_clinical_medical_context?
+  patients_clinical_medication        patients_clinical_medication[]
+  patients_clinical_surgical_history  patients_clinical_surgical_history[]
+  patients_clinical_systemic_disease  patients_clinical_systemic_disease[]
+  payments                            payments[]
+  recalls                             recalls[]
+  tooth_records                       tooth_records[]
+  treatment_plans                     treatment_plans[]
+  treatments                          treatments[]
+
+  @@index([clinic_id], map: "ix_patients_clinic_id")
+  @@index([clinic_id, status], map: "ix_patients_clinic_status")
+}
+
+model patients_clinical_allergy {
+  id           String   @id @db.Uuid
+  patient_id   String   @db.Uuid
+  clinic_id    String   @db.Uuid
+  name         String   @db.VarChar(100)
+  type         String?  @db.VarChar(50)
+  severity     String   @db.VarChar(20)
+  reaction     String?  @db.VarChar(500)
+  notes        String?
+  created_at   DateTime @db.Timestamptz(6)
+  updated_at   DateTime @db.Timestamptz(6)
+  reference_id String?  @db.Uuid
+  status       String   @default("active") @db.VarChar(20)
+  clinics      clinics  @relation(fields: [clinic_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  patients     patients @relation(fields: [patient_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@index([clinic_id], map: "ix_patients_clinical_allergy_clinic_id")
+  @@index([patient_id], map: "ix_patients_clinical_allergy_patient_id")
+  @@index([severity], map: "ix_patients_clinical_allergy_severity")
+}
+
+model patients_clinical_emergency_contact {
+  patient_id        String   @id @db.Uuid
+  clinic_id         String   @db.Uuid
+  name              String   @db.VarChar(100)
+  relationship      String?  @db.VarChar(50)
+  phone             String   @db.VarChar(20)
+  email             String?  @db.VarChar(255)
+  is_legal_guardian Boolean
+  created_at        DateTime @db.Timestamptz(6)
+  updated_at        DateTime @db.Timestamptz(6)
+  status            String   @default("active") @db.VarChar(20)
+  clinics           clinics  @relation(fields: [clinic_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  patients          patients @relation(fields: [patient_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@index([clinic_id], map: "ix_patients_clinical_emergency_contact_clinic_id")
+}
+
+model patients_clinical_legal_guardian {
+  patient_id   String   @id @db.Uuid
+  clinic_id    String   @db.Uuid
+  name         String   @db.VarChar(100)
+  relationship String   @db.VarChar(50)
+  dni          String?  @db.VarChar(20)
+  phone        String   @db.VarChar(20)
+  email        String?  @db.VarChar(255)
+  address      String?  @db.VarChar(200)
+  notes        String?
+  created_at   DateTime @db.Timestamptz(6)
+  updated_at   DateTime @db.Timestamptz(6)
+  status       String   @default("active") @db.VarChar(20)
+  clinics      clinics  @relation(fields: [clinic_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  patients     patients @relation(fields: [patient_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@index([clinic_id], map: "ix_patients_clinical_legal_guardian_clinic_id")
+}
+
+model patients_clinical_medical_context {
+  patient_id                      String    @id @db.Uuid
+  clinic_id                       String    @db.Uuid
+  is_pregnant                     Boolean
+  pregnancy_week                  Int?
+  is_lactating                    Boolean
+  is_on_anticoagulants            Boolean
+  anticoagulant_medication        String?   @db.VarChar(100)
+  inr_value                       Float?
+  last_inr_date                   DateTime? @db.Date
+  is_smoker                       Boolean
+  smoking_frequency               String?   @db.VarChar(100)
+  alcohol_consumption             String?   @db.VarChar(100)
+  bruxism                         Boolean
+  adverse_reactions_to_anesthesia Boolean
+  anesthesia_reaction_details     String?   @db.VarChar(500)
+  last_updated_at                 DateTime? @db.Timestamptz(6)
+  last_updated_by                 String?   @db.Uuid
+  created_at                      DateTime  @db.Timestamptz(6)
+  updated_at                      DateTime  @db.Timestamptz(6)
+  clinics                         clinics   @relation(fields: [clinic_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  patients                        patients  @relation(fields: [patient_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@index([clinic_id], map: "ix_patients_clinical_medical_context_clinic_id")
+}
+
+model patients_clinical_medication {
+  id           String    @id @db.Uuid
+  patient_id   String    @db.Uuid
+  clinic_id    String    @db.Uuid
+  name         String    @db.VarChar(100)
+  dosage       String?   @db.VarChar(100)
+  frequency    String?   @db.VarChar(100)
+  start_date   DateTime? @db.Date
+  notes        String?
+  created_at   DateTime  @db.Timestamptz(6)
+  updated_at   DateTime  @db.Timestamptz(6)
+  reference_id String?   @db.Uuid
+  status       String    @default("active") @db.VarChar(20)
+  clinics      clinics   @relation(fields: [clinic_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  patients     patients  @relation(fields: [patient_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@index([clinic_id], map: "ix_patients_clinical_medication_clinic_id")
+  @@index([patient_id], map: "ix_patients_clinical_medication_patient_id")
+}
+
+model patients_clinical_surgical_history {
+  id            String    @id @db.Uuid
+  patient_id    String    @db.Uuid
+  clinic_id     String    @db.Uuid
+  procedure     String    @db.VarChar(200)
+  surgery_date  DateTime? @db.Date
+  complications String?
+  notes         String?
+  created_at    DateTime  @db.Timestamptz(6)
+  updated_at    DateTime  @db.Timestamptz(6)
+  reference_id  String?   @db.Uuid
+  status        String    @default("active") @db.VarChar(20)
+  clinics       clinics   @relation(fields: [clinic_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  patients      patients  @relation(fields: [patient_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@index([clinic_id], map: "ix_patients_clinical_surgical_history_clinic_id")
+  @@index([patient_id], map: "ix_patients_clinical_surgical_history_patient_id")
+}
+
+model patients_clinical_systemic_disease {
+  id             String    @id @db.Uuid
+  patient_id     String    @db.Uuid
+  clinic_id      String    @db.Uuid
+  name           String    @db.VarChar(100)
+  type           String?   @db.VarChar(50)
+  diagnosis_date DateTime? @db.Date
+  is_controlled  Boolean
+  is_critical    Boolean
+  medications    String?
+  notes          String?
+  created_at     DateTime  @db.Timestamptz(6)
+  updated_at     DateTime  @db.Timestamptz(6)
+  reference_id   String?   @db.Uuid
+  status         String    @default("active") @db.VarChar(20)
+  clinics        clinics   @relation(fields: [clinic_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  patients       patients  @relation(fields: [patient_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@index([clinic_id], map: "ix_patients_clinical_systemic_disease_clinic_id")
+  @@index([is_critical], map: "ix_patients_clinical_systemic_disease_is_critical")
+  @@index([patient_id], map: "ix_patients_clinical_systemic_disease_patient_id")
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+model payment_allocations {
+  id          String   @id @db.Uuid
+  clinic_id   String   @db.Uuid
+  payment_id  String   @db.Uuid
+  target_type String   @db.VarChar(20)
+  budget_id   String?  @db.Uuid
+  amount      Decimal  @db.Decimal(12, 2)
+  created_by  String   @db.Uuid
+  created_at  DateTime @db.Timestamptz(6)
+  updated_at  DateTime @db.Timestamptz(6)
+  budgets     budgets? @relation(fields: [budget_id], references: [id], onDelete: Restrict, onUpdate: NoAction)
+  clinics     clinics  @relation(fields: [clinic_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  users       users    @relation(fields: [created_by], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  payments    payments @relation(fields: [payment_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@index([clinic_id, budget_id], map: "idx_alloc_clinic_budget")
+  @@index([payment_id], map: "idx_alloc_payment")
+}
+
+model payment_history {
+  id             String   @id @db.Uuid
+  clinic_id      String   @db.Uuid
+  payment_id     String   @db.Uuid
+  action         String   @db.VarChar(30)
+  changed_by     String   @db.Uuid
+  changed_at     DateTime @db.Timestamptz(6)
+  previous_state Json?
+  new_state      Json?
+  notes          String?
+  users          users    @relation(fields: [changed_by], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  clinics        clinics  @relation(fields: [clinic_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  payments       payments @relation(fields: [payment_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@index([clinic_id, changed_at], map: "idx_payment_history_clinic_changed")
+  @@index([payment_id], map: "idx_payment_history_payment")
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+model payments {
+  id                  String                @id @db.Uuid
+  clinic_id           String                @db.Uuid
+  patient_id          String                @db.Uuid
+  amount              Decimal               @db.Decimal(12, 2)
+  currency            String                @db.VarChar(3)
+  method              String                @db.VarChar(30)
+  payment_date        DateTime              @db.Date
+  reference           String?               @db.VarChar(100)
+  notes               String?
+  recorded_by         String                @db.Uuid
+  created_at          DateTime              @db.Timestamptz(6)
+  updated_at          DateTime              @db.Timestamptz(6)
+  idempotency_key     String?               @db.VarChar(100)
+  invoice_payments    invoice_payments[]
+  payment_allocations payment_allocations[]
+  payment_history     payment_history[]
+  clinics             clinics               @relation(fields: [clinic_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  patients            patients              @relation(fields: [patient_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  users               users                 @relation(fields: [recorded_by], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  refunds             refunds[]
+
+  @@index([clinic_id, payment_date], map: "idx_payments_clinic_date")
+  @@index([clinic_id, method], map: "idx_payments_clinic_method")
+  @@index([clinic_id, patient_id], map: "idx_payments_clinic_patient")
+}
+
+model permissions {
+  id                              String                            @id @db.Uuid
+  module                          String                            @db.VarChar(100)
+  code                            String                            @unique(map: "ix_permissions_code") @db.VarChar(200)
+  description                     String?
+  created_at                      DateTime                          @db.Timestamptz(6)
+  updated_at                      DateTime                          @db.Timestamptz(6)
+  clinic_role_overrides           clinic_role_overrides[]
+  module_default_role_permissions module_default_role_permissions[]
+  role_permissions                role_permissions[]
+}
+
+model planned_treatment_item_sessions {
+  id                      String                  @id @db.Uuid
+  plan_item_id            String                  @db.Uuid
+  sequence                Int
+  label                   String?                 @db.VarChar(120)
+  amount                  Decimal                 @db.Decimal(10, 2)
+  status                  String                  @default("pending") @db.VarChar(20)
+  completed_at            DateTime?               @db.Timestamptz(6)
+  completed_by            String?                 @db.Uuid
+  notes                   String?
+  created_at              DateTime                @default(now()) @db.Timestamptz(6)
+  updated_at              DateTime                @default(now()) @db.Timestamptz(6)
+  users                   users?                  @relation(fields: [completed_by], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  planned_treatment_items planned_treatment_items @relation(fields: [plan_item_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@unique([plan_item_id, sequence], map: "uq_plan_item_session_sequence")
+  @@index([plan_item_id], map: "idx_pti_session_plan_item")
+  @@index([plan_item_id, status], map: "ix_pti_session_plan_item_status")
+}
+
+model planned_treatment_items {
+  id                                                            String                            @id @db.Uuid
+  clinic_id                                                     String                            @db.Uuid
+  treatment_plan_id                                             String                            @db.Uuid
+  treatment_id                                                  String                            @unique(map: "uq_planned_item_treatment") @db.Uuid
+  sequence_order                                                Int
+  status                                                        String                            @db.VarChar(20)
+  completed_without_appointment                                 Boolean
+  completed_at                                                  DateTime?                         @db.Timestamptz(6)
+  completed_by                                                  String?                           @db.Uuid
+  notes                                                         String?
+  created_at                                                    DateTime                          @db.Timestamptz(6)
+  updated_at                                                    DateTime                          @db.Timestamptz(6)
+  assigned_professional_id                                      String?                           @db.Uuid
+  appointment_treatments                                        appointment_treatments[]
+  planned_treatment_item_sessions                               planned_treatment_item_sessions[]
+  users_planned_treatment_items_assigned_professional_idTousers users?                            @relation("planned_treatment_items_assigned_professional_idTousers", fields: [assigned_professional_id], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "fk_planned_items_assigned_professional")
+  clinics                                                       clinics                           @relation(fields: [clinic_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  users_planned_treatment_items_completed_byTousers             users?                            @relation("planned_treatment_items_completed_byTousers", fields: [completed_by], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  treatments                                                    treatments                        @relation(fields: [treatment_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  treatment_plans                                               treatment_plans                   @relation(fields: [treatment_plan_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@index([treatment_plan_id], map: "idx_planned_items_plan")
+  @@index([treatment_plan_id, assigned_professional_id], map: "idx_planned_items_plan_professional")
+  @@index([treatment_plan_id, status], map: "idx_planned_items_status")
+  @@index([treatment_id], map: "idx_planned_items_treatment")
+  @@index([assigned_professional_id], map: "ix_planned_treatment_items_assigned_professional_id")
+  @@index([clinic_id], map: "ix_planned_treatment_items_clinic_id")
+  @@index([treatment_id], map: "ix_planned_treatment_items_treatment_id")
+  @@index([treatment_plan_id], map: "ix_planned_treatment_items_treatment_plan_id")
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+model professional_overrides {
+  id              String            @id @db.Uuid
+  clinic_id       String            @db.Uuid
+  user_id         String            @db.Uuid
+  start_date      DateTime          @db.Date
+  end_date        DateTime          @db.Date
+  kind            String            @db.VarChar(20)
+  reason          String?           @db.VarChar(200)
+  created_at      DateTime          @db.Timestamptz(6)
+  updated_at      DateTime          @db.Timestamptz(6)
+  clinics         clinics           @relation(fields: [clinic_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  users           users             @relation(fields: [user_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  schedule_shifts schedule_shifts[]
+
+  @@index([clinic_id], map: "ix_professional_overrides_clinic_id")
+  @@index([clinic_id, user_id, start_date, end_date], map: "ix_professional_overrides_clinic_user_range")
+  @@index([user_id], map: "ix_professional_overrides_user_id")
+}
+
+model professional_weekly_schedules {
+  id              String            @id @db.Uuid
+  clinic_id       String            @db.Uuid
+  user_id         String            @db.Uuid
+  is_active       Boolean
+  created_at      DateTime          @db.Timestamptz(6)
+  updated_at      DateTime          @db.Timestamptz(6)
+  clinics         clinics           @relation(fields: [clinic_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  users           users             @relation(fields: [user_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  schedule_shifts schedule_shifts[]
+
+  @@unique([clinic_id, user_id], map: "uq_professional_weekly_schedule_user")
+  @@index([clinic_id], map: "ix_professional_weekly_schedules_clinic_id")
+  @@index([user_id], map: "ix_professional_weekly_schedules_user_id")
+}
+
+model recall_contact_attempts {
+  id           String   @id @db.Uuid
+  recall_id    String   @db.Uuid
+  clinic_id    String   @db.Uuid
+  attempted_at DateTime @default(now()) @db.Timestamptz(6)
+  attempted_by String   @db.Uuid
+  channel      String   @db.VarChar(20)
+  outcome      String   @db.VarChar(30)
+  note         String?
+  users        users    @relation(fields: [attempted_by], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  clinics      clinics  @relation(fields: [clinic_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  recalls      recalls  @relation(fields: [recall_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@index([clinic_id], map: "ix_recall_contact_attempts_clinic_id")
+  @@index([recall_id], map: "ix_recall_contact_attempts_recall_id")
+}
+
+model recall_settings {
+  clinic_id                           String   @id @db.Uuid
+  reason_intervals                    Json
+  category_to_reason                  Json
+  auto_suggest_on_treatment_completed Boolean
+  auto_link_on_appointment_scheduled  Boolean
+  updated_at                          DateTime @default(now()) @db.Timestamptz(6)
+  clinics                             clinics  @relation(fields: [clinic_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+}
+
+model recalls {
+  id                                            String                    @id @db.Uuid
+  clinic_id                                     String                    @db.Uuid
+  patient_id                                    String                    @db.Uuid
+  due_month                                     DateTime                  @db.Date
+  due_date                                      DateTime?                 @db.Date
+  reason                                        String                    @db.VarChar(40)
+  reason_note                                   String?
+  priority                                      String                    @db.VarChar(10)
+  status                                        String                    @db.VarChar(30)
+  recommended_by                                String?                   @db.Uuid
+  assigned_professional_id                      String?                   @db.Uuid
+  last_contact_attempt_at                       DateTime?                 @db.Timestamptz(6)
+  contact_attempt_count                         Int
+  linked_appointment_id                         String?                   @db.Uuid
+  linked_treatment_id                           String?                   @db.Uuid
+  linked_treatment_category_key                 String?                   @db.VarChar(80)
+  completed_at                                  DateTime?                 @db.Timestamptz(6)
+  created_at                                    DateTime                  @db.Timestamptz(6)
+  updated_at                                    DateTime                  @db.Timestamptz(6)
+  recall_contact_attempts                       recall_contact_attempts[]
+  users_recalls_assigned_professional_idTousers users?                    @relation("recalls_assigned_professional_idTousers", fields: [assigned_professional_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  clinics                                       clinics                   @relation(fields: [clinic_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  appointments                                  appointments?             @relation(fields: [linked_appointment_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  patients                                      patients                  @relation(fields: [patient_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  users_recalls_recommended_byTousers           users?                    @relation("recalls_recommended_byTousers", fields: [recommended_by], references: [id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@index([clinic_id, due_month, status], map: "ix_recalls_clinic_due_month_status")
+  @@index([clinic_id], map: "ix_recalls_clinic_id")
+  @@index([clinic_id, patient_id, reason, status], map: "ix_recalls_clinic_patient_reason_status")
+  @@index([due_month], map: "ix_recalls_due_month")
+  @@index([patient_id], map: "ix_recalls_patient_id")
+  @@index([status], map: "ix_recalls_status")
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+model refunds {
+  id          String   @id @db.Uuid
+  clinic_id   String   @db.Uuid
+  payment_id  String   @db.Uuid
+  amount      Decimal  @db.Decimal(12, 2)
+  method      String   @db.VarChar(30)
+  reason_code String   @db.VarChar(30)
+  reason_note String?
+  refunded_at DateTime @db.Timestamptz(6)
+  refunded_by String   @db.Uuid
+  created_at  DateTime @db.Timestamptz(6)
+  updated_at  DateTime @db.Timestamptz(6)
+  clinics     clinics  @relation(fields: [clinic_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  payments    payments @relation(fields: [payment_id], references: [id], onUpdate: NoAction)
+  users       users    @relation(fields: [refunded_by], references: [id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@index([clinic_id, refunded_at], map: "idx_refund_clinic_date")
+  @@index([payment_id], map: "idx_refund_payment")
+}
+
+model role_permissions {
+  id            String      @id @db.Uuid
+  role_id       String      @db.Uuid
+  permission_id String      @db.Uuid
+  created_at    DateTime    @db.Timestamptz(6)
+  updated_at    DateTime    @db.Timestamptz(6)
+  permissions   permissions @relation(fields: [permission_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  roles         roles       @relation(fields: [role_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@unique([role_id, permission_id], map: "uq_role_permission")
+  @@index([permission_id], map: "ix_role_permissions_permission_id")
+  @@index([role_id], map: "ix_role_permissions_role_id")
+}
+
+model roles {
+  id                    String                  @id @db.Uuid
+  clinic_id             String?                 @db.Uuid
+  name                  String                  @db.VarChar(50)
+  is_system             Boolean                 @default(false)
+  description           String?
+  created_at            DateTime                @db.Timestamptz(6)
+  updated_at            DateTime                @db.Timestamptz(6)
+  clinic_memberships    clinic_memberships[]
+  clinic_role_overrides clinic_role_overrides[]
+  role_permissions      role_permissions[]
+  clinics               clinics?                @relation(fields: [clinic_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@unique([clinic_id, name], map: "uq_roles_clinic_name")
+  @@index([clinic_id], map: "ix_roles_clinic_id")
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+model schedule_shifts {
+  id                            String                         @id @db.Uuid
+  clinic_weekly_id              String?                        @db.Uuid
+  clinic_override_id            String?                        @db.Uuid
+  professional_weekly_id        String?                        @db.Uuid
+  professional_override_id      String?                        @db.Uuid
+  weekday                       Int?                           @db.SmallInt
+  shift_date                    DateTime?                      @db.Date
+  start_time                    DateTime                       @db.Time(6)
+  end_time                      DateTime                       @db.Time(6)
+  clinic_overrides              clinic_overrides?              @relation(fields: [clinic_override_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  clinic_weekly_schedules       clinic_weekly_schedules?       @relation(fields: [clinic_weekly_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  professional_overrides        professional_overrides?        @relation(fields: [professional_override_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  professional_weekly_schedules professional_weekly_schedules? @relation(fields: [professional_weekly_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@index([clinic_override_id, shift_date], map: "ix_schedule_shifts_clinic_override")
+  @@index([clinic_weekly_id, weekday], map: "ix_schedule_shifts_clinic_weekly")
+  @@index([professional_override_id, shift_date], map: "ix_schedule_shifts_professional_override")
+  @@index([professional_weekly_id, weekday], map: "ix_schedule_shifts_professional_weekly")
+}
+
+model tooth_records {
+  id                 String            @id @db.Uuid
+  clinic_id          String            @db.Uuid
+  patient_id         String            @db.Uuid
+  tooth_number       Int
+  tooth_type         String            @db.VarChar(20)
+  general_condition  String            @db.VarChar(30)
+  surfaces           Json
+  notes              String?
+  is_displaced       Boolean
+  is_rotated         Boolean
+  displacement_notes String?
+  created_at         DateTime          @db.Timestamptz(6)
+  updated_at         DateTime          @db.Timestamptz(6)
+  clinics            clinics           @relation(fields: [clinic_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  patients           patients          @relation(fields: [patient_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  treatment_teeth    treatment_teeth[]
+
+  @@unique([patient_id, tooth_number], map: "uq_patient_tooth")
+  @@index([clinic_id, patient_id], map: "idx_tooth_records_clinic_patient")
+  @@index([patient_id], map: "idx_tooth_records_patient")
+  @@index([clinic_id], map: "ix_tooth_records_clinic_id")
+  @@index([patient_id], map: "ix_tooth_records_patient_id")
+}
+
+model treatment_catalog_items {
+  id                            String                         @id @db.Uuid
+  clinic_id                     String                         @db.Uuid
+  category_id                   String                         @db.Uuid
+  internal_code                 String                         @db.VarChar(50)
+  names                         Json
+  descriptions                  Json?
+  default_price                 Decimal?                       @db.Decimal(10, 2)
+  cost_price                    Decimal?                       @db.Decimal(10, 2)
+  default_duration_minutes      Int?
+  requires_appointment          Boolean
+  vat_type_id                   String?                        @db.Uuid
+  pricing_strategy              String                         @db.VarChar(20)
+  pricing_config                Json?
+  surface_prices                Json?
+  treatment_scope               String                         @db.VarChar(20)
+  is_diagnostic                 Boolean
+  requires_surfaces             Boolean
+  billing_mode                  String                         @db.VarChar(20)
+  material_notes                String?
+  is_active                     Boolean
+  is_system                     Boolean
+  deleted_at                    DateTime?                      @db.Timestamptz(6)
+  created_at                    DateTime                       @db.Timestamptz(6)
+  updated_at                    DateTime                       @db.Timestamptz(6)
+  appointment_treatments        appointment_treatments[]
+  budget_items                  budget_items[]
+  catalog_item_sessions         catalog_item_sessions[]
+  invoice_items                 invoice_items[]
+  treatment_categories          treatment_categories           @relation(fields: [category_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  clinics                       clinics                        @relation(fields: [clinic_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  vat_types                     vat_types?                     @relation(fields: [vat_type_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  treatment_odontogram_mappings treatment_odontogram_mappings?
+  treatments                    treatments[]
+
+  @@index([clinic_id, is_active], map: "idx_catalog_items_active")
+  @@index([category_id], map: "idx_catalog_items_category")
+  @@index([clinic_id], map: "idx_catalog_items_clinic")
+  @@index([vat_type_id], map: "idx_catalog_items_vat_type")
+  @@index([category_id], map: "ix_treatment_catalog_items_category_id")
+  @@index([clinic_id], map: "ix_treatment_catalog_items_clinic_id")
+  @@index([vat_type_id], map: "ix_treatment_catalog_items_vat_type_id")
+}
+
+model treatment_categories {
+  id                         String                    @id @db.Uuid
+  clinic_id                  String                    @db.Uuid
+  parent_id                  String?                   @db.Uuid
+  key                        String                    @db.VarChar(50)
+  names                      Json
+  descriptions               Json?
+  display_order              Int
+  icon                       String?                   @db.VarChar(50)
+  is_active                  Boolean
+  is_system                  Boolean
+  created_at                 DateTime                  @db.Timestamptz(6)
+  updated_at                 DateTime                  @db.Timestamptz(6)
+  treatment_catalog_items    treatment_catalog_items[]
+  clinics                    clinics                   @relation(fields: [clinic_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  treatment_categories       treatment_categories?     @relation("treatment_categoriesTotreatment_categories", fields: [parent_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  other_treatment_categories treatment_categories[]    @relation("treatment_categoriesTotreatment_categories")
+
+  @@unique([clinic_id, key], map: "uq_category_clinic_key")
+  @@index([clinic_id], map: "idx_treatment_categories_clinic")
+  @@index([parent_id], map: "idx_treatment_categories_parent")
+  @@index([clinic_id], map: "ix_treatment_categories_clinic_id")
+  @@index([parent_id], map: "ix_treatment_categories_parent_id")
+}
+
+model treatment_odontogram_mappings {
+  id                        String                  @id @db.Uuid
+  clinic_id                 String                  @db.Uuid
+  catalog_item_id           String                  @unique @db.Uuid
+  odontogram_treatment_type String                  @db.VarChar(30)
+  visualization_rules       Json
+  visualization_config      Json
+  clinical_category         String                  @db.VarChar(20)
+  created_at                DateTime                @db.Timestamptz(6)
+  updated_at                DateTime                @db.Timestamptz(6)
+  treatment_catalog_items   treatment_catalog_items @relation(fields: [catalog_item_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  clinics                   clinics                 @relation(fields: [clinic_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@index([clinic_id], map: "idx_odontogram_mapping_clinic")
+  @@index([odontogram_treatment_type], map: "idx_odontogram_mapping_type")
+  @@index([clinic_id], map: "ix_treatment_odontogram_mappings_clinic_id")
+}
+
+model treatment_plans {
+  id                                                    String                    @id @db.Uuid
+  clinic_id                                             String                    @db.Uuid
+  patient_id                                            String                    @db.Uuid
+  plan_number                                           String                    @db.VarChar(50)
+  title                                                 String?                   @db.VarChar(200)
+  status                                                String                    @db.VarChar(20)
+  budget_id                                             String?                   @unique(map: "ix_treatment_plans_budget_id") @db.Uuid
+  assigned_professional_id                              String?                   @db.Uuid
+  created_by                                            String                    @db.Uuid
+  diagnosis_notes                                       String?
+  internal_notes                                        String?
+  deleted_at                                            DateTime?                 @db.Timestamptz(6)
+  created_at                                            DateTime                  @db.Timestamptz(6)
+  updated_at                                            DateTime                  @db.Timestamptz(6)
+  closure_reason                                        String?                   @db.VarChar(50)
+  closure_note                                          String?
+  closed_at                                             DateTime?                 @db.Timestamptz(6)
+  confirmed_at                                          DateTime?                 @db.Timestamptz(6)
+  planned_treatment_items                               planned_treatment_items[]
+  users_treatment_plans_assigned_professional_idTousers users?                    @relation("treatment_plans_assigned_professional_idTousers", fields: [assigned_professional_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  budgets                                               budgets?                  @relation(fields: [budget_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  clinics                                               clinics                   @relation(fields: [clinic_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  users_treatment_plans_created_byTousers               users                     @relation("treatment_plans_created_byTousers", fields: [created_by], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  patients                                              patients                  @relation(fields: [patient_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@unique([clinic_id, plan_number], map: "uq_treatment_plan_number")
+  @@index([budget_id], map: "idx_treatment_plans_budget")
+  @@index([clinic_id, status, closed_at], map: "idx_treatment_plans_clinic_status_closed")
+  @@index([patient_id], map: "idx_treatment_plans_patient")
+  @@index([clinic_id, status], map: "idx_treatment_plans_status")
+  @@index([clinic_id], map: "ix_treatment_plans_clinic_id")
+  @@index([patient_id], map: "ix_treatment_plans_patient_id")
+}
+
+model treatment_teeth {
+  id              String        @id @db.Uuid
+  treatment_id    String        @db.Uuid
+  tooth_record_id String        @db.Uuid
+  tooth_number    Int
+  role            String?       @db.VarChar(20)
+  surfaces        Json?
+  created_at      DateTime      @db.Timestamptz(6)
+  updated_at      DateTime      @db.Timestamptz(6)
+  tooth_records   tooth_records @relation(fields: [tooth_record_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  treatments      treatments    @relation(fields: [treatment_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@unique([treatment_id, tooth_number], map: "uq_treatment_tooth")
+  @@index([tooth_record_id], map: "idx_treatment_teeth_tooth_record")
+  @@index([treatment_id], map: "idx_treatment_teeth_treatment")
+  @@index([tooth_record_id], map: "ix_treatment_teeth_tooth_record_id")
+  @@index([treatment_id], map: "ix_treatment_teeth_treatment_id")
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+model treatments {
+  id                      String                   @id @db.Uuid
+  clinic_id               String                   @db.Uuid
+  patient_id              String                   @db.Uuid
+  clinical_type           String                   @db.VarChar(30)
+  scope                   String                   @db.VarChar(20)
+  arch                    String?                  @db.VarChar(10)
+  catalog_item_id         String?                  @db.Uuid
+  status                  String                   @db.VarChar(20)
+  recorded_at             DateTime                 @db.Timestamptz(6)
+  performed_at            DateTime?                @db.Timestamptz(6)
+  performed_by            String?                  @db.Uuid
+  price_snapshot          Decimal?                 @db.Decimal(10, 2)
+  duration_snapshot       Int?
+  vat_rate_snapshot       Decimal?                 @db.Decimal(5, 2)
+  budget_item_id          String?                  @db.Uuid
+  notes                   String?
+  source_module           String                   @db.VarChar(30)
+  deleted_at              DateTime?                @db.Timestamptz(6)
+  created_at              DateTime                 @db.Timestamptz(6)
+  updated_at              DateTime                 @db.Timestamptz(6)
+  budget_items            budget_items[]
+  planned_treatment_items planned_treatment_items?
+  treatment_teeth         treatment_teeth[]
+  treatment_catalog_items treatment_catalog_items? @relation(fields: [catalog_item_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  clinics                 clinics                  @relation(fields: [clinic_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  patients                patients                 @relation(fields: [patient_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  users                   users?                   @relation(fields: [performed_by], references: [id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@index([budget_item_id], map: "idx_treatments_budget")
+  @@index([catalog_item_id], map: "idx_treatments_catalog")
+  @@index([patient_id], map: "idx_treatments_patient")
+  @@index([patient_id, status], map: "idx_treatments_status")
+  @@index([catalog_item_id], map: "ix_treatments_catalog_item_id")
+  @@index([clinic_id], map: "ix_treatments_clinic_id")
+  @@index([patient_id], map: "ix_treatments_patient_id")
+}
+
+model users {
+  id                                                                              String                            @id @db.Uuid
+  email                                                                           String                            @unique(map: "ix_users_email") @db.VarChar(255)
+  password_hash                                                                   String                            @db.VarChar(255)
+  first_name                                                                      String                            @db.VarChar(100)
+  last_name                                                                       String                            @db.VarChar(100)
+  professional_id                                                                 String?                           @db.VarChar(50)
+  is_active                                                                       Boolean
+  token_version                                                                   Int
+  created_at                                                                      DateTime                          @db.Timestamptz(6)
+  updated_at                                                                      DateTime                          @db.Timestamptz(6)
+  agent_approval_queue                                                            agent_approval_queue[]
+  agent_audit_logs                                                                agent_audit_logs[]
+  agent_sessions                                                                  agent_sessions[]
+  appointment_cabinet_events                                                      appointment_cabinet_events[]
+  appointment_status_events                                                       appointment_status_events[]
+  appointments_appointments_cabinet_assigned_byTousers                            appointments[]                    @relation("appointments_cabinet_assigned_byTousers")
+  appointments_appointments_professional_idTousers                                appointments[]                    @relation("appointments_professional_idTousers")
+  auth_refresh_tokens                                                             auth_refresh_tokens[]
+  budget_history                                                                  budget_history[]
+  budgets_budgets_assigned_professional_idTousers                                 budgets[]                         @relation("budgets_assigned_professional_idTousers")
+  budgets_budgets_created_byTousers                                               budgets[]                         @relation("budgets_created_byTousers")
+  clinic_memberships                                                              clinic_memberships[]
+  clinical_notes                                                                  clinical_notes[]
+  communication_messages                                                          communication_messages[]
+  copilot_conversations                                                           copilot_conversations[]
+  documents                                                                       documents[]
+  invoice_history                                                                 invoice_history[]
+  invoice_payments                                                                invoice_payments[]
+  invoice_series_history                                                          invoice_series_history[]
+  invoices_invoices_created_byTousers                                             invoices[]                        @relation("invoices_created_byTousers")
+  invoices_invoices_issued_byTousers                                              invoices[]                        @relation("invoices_issued_byTousers")
+  notification_preferences                                                        notification_preferences[]
+  odontogram_history                                                              odontogram_history[]
+  patient_timeline                                                                patient_timeline[]
+  payment_allocations                                                             payment_allocations[]
+  payment_history                                                                 payment_history[]
+  payments                                                                        payments[]
+  planned_treatment_item_sessions                                                 planned_treatment_item_sessions[]
+  planned_treatment_items_planned_treatment_items_assigned_professional_idTousers planned_treatment_items[]         @relation("planned_treatment_items_assigned_professional_idTousers")
+  planned_treatment_items_planned_treatment_items_completed_byTousers             planned_treatment_items[]         @relation("planned_treatment_items_completed_byTousers")
+  professional_overrides                                                          professional_overrides[]
+  professional_weekly_schedules                                                   professional_weekly_schedules[]
+  recall_contact_attempts                                                         recall_contact_attempts[]
+  recalls_recalls_assigned_professional_idTousers                                 recalls[]                         @relation("recalls_assigned_professional_idTousers")
+  recalls_recalls_recommended_byTousers                                           recalls[]                         @relation("recalls_recommended_byTousers")
+  refunds                                                                         refunds[]
+  treatment_plans_treatment_plans_assigned_professional_idTousers                 treatment_plans[]                 @relation("treatment_plans_assigned_professional_idTousers")
+  treatment_plans_treatment_plans_created_byTousers                               treatment_plans[]                 @relation("treatment_plans_created_byTousers")
+  treatments                                                                      treatments[]
+}
+
+model vat_types {
+  id                      String                    @id @db.Uuid
+  clinic_id               String                    @db.Uuid
+  names                   Json
+  rate                    Float
+  is_default              Boolean
+  is_active               Boolean
+  is_system               Boolean
+  created_at              DateTime                  @db.Timestamptz(6)
+  updated_at              DateTime                  @db.Timestamptz(6)
+  legal_note              String?                   @db.VarChar(300)
+  budget_items            budget_items[]
+  invoice_items           invoice_items[]
+  treatment_catalog_items treatment_catalog_items[]
+  clinics                 clinics                   @relation(fields: [clinic_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@index([clinic_id], map: "idx_vat_types_clinic")
+  @@index([clinic_id, is_default], map: "idx_vat_types_default")
+  @@index([clinic_id], map: "ix_vat_types_clinic_id")
+}

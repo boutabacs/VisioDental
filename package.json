@@ -1,0 +1,18 @@
+{
+  "name": "visiodental",
+  "version": "1.0.0",
+  "private": true,
+  "description": "VisioDental — lanceur natif multiplateforme (sans Docker)",
+  "scripts": {
+    "start": "node scripts/start.mjs",
+    "backend": "node scripts/start.mjs --only=backend",
+    "frontend": "node scripts/start.mjs --only=frontend",
+    "setup": "node scripts/setup.mjs",
+    "build:prod": "node packaging/build-prod.mjs",
+    "seed": "node scripts/seed.mjs",
+    "reset-db": "node scripts/reset-db.mjs"
+  },
+  "engines": {
+    "node": ">=22"
+  }
+}

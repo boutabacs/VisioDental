@@ -1,0 +1,26 @@
+{
+  "name": "visiodental-api",
+  "version": "0.1.0",
+  "private": true,
+  "type": "commonjs",
+  "main": "dist/server.js",
+  "scripts": {
+    "start": "node dist/server.js",
+    "provision": "node dist/scripts/provision.js"
+  },
+  "dependencies": {
+    "@prisma/client": "^6.19.0",
+    "bcryptjs": "^3.0.2",
+    "cookie-parser": "^1.4.7",
+    "cors": "^2.8.5",
+    "dotenv": "^18.0.10",
+    "express": "^5.3.0",
+    "express-rate-limit": "^8.2.1",
+    "helmet": "^8.1.0",
+    "jsonwebtoken": "^9.0.3",
+    "playwright-core": "^1.65.1",
+    "prisma": "^6.19.0",
+    "qrcode": "^1.5.4",
+    "zod": "^4.1.12"
+  }
+}
